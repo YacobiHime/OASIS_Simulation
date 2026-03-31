@@ -332,7 +332,15 @@ class Platform:
         post_table = fetch_table_from_db(self.db_cursor, "post")
         trace_table = fetch_table_from_db(self.db_cursor, "trace")
         rec_matrix = fetch_rec_table_as_matrix(self.db_cursor)
+        
+        if not post_table:
+            twitter_log.info("No posts available. Skipping recommendation.")
+            return
 
+        if self.recsys_type == RecsysType.RANDOM:
+            new_rec_matrix = rec_sys_random(post_table, rec_matrix,
+                                            self.max_rec_post_len)
+            
         if self.recsys_type == RecsysType.RANDOM:
             new_rec_matrix = rec_sys_random(post_table, rec_matrix,
                                             self.max_rec_post_len)

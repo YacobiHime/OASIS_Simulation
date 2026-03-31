@@ -46,6 +46,34 @@ async def main():
     )
 
     await env.reset()
+    
+    from oasis import ManualAction
+    print("初期の話題（シードデータ）を投稿します...")
+    
+    # エージェント一覧からAgent 0を取得
+    agents = list(env.agent_graph.get_agents())
+    agent_0 = agents[0][1] 
+    
+    # ManualActionを使って、LLMを介さずに直接システムへ投稿を指示
+    initial_action = {
+        agent_0: ManualAction(
+            action_type=ActionType.CREATE_POST,
+            action_args={"content": "新しいプロジェクト管理システムが稼働しました。皆さん、まずは自分の担当タスクや現在の状況を共有してください。"}
+        )
+    }
+    await env.step(initial_action)
+
+    # ==========================================
+    # 自律行動の開始
+    # ==========================================
+    print("シミュレーションを開始します...")
+    for step in range(3): 
+        print(f"ステップ {step+1} 実行中...")
+        actions = {agent: LLMAction() for _, agent in env.agent_graph.get_agents()}
+        await env.step(actions)
+
+    await env.close()
+    print("シミュレーションが完了しました。")
 
     # まずは動作確認のため、短め（3ステップ）でLLMエージェントに自律行動させます
     print("シミュレーションを開始します...")
