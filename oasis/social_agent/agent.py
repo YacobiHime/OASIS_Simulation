@@ -123,32 +123,104 @@ class SocialAgent(ChatAgent):
             "What do you think Helen should do?")
 
     async def perform_action_by_llm(self):
-        # Get posts:
+        # 1. 環境情報の取得
         env_prompt = await self.env.to_text_prompt()
-        user_msg = BaseMessage.make_user_message(
+        
+        # テキスト生成を伴うアクションと、そのテキストが格納される引数名のマッピング
+        text_generation_actions = {
+            "create_post": "content",
+            "quote_post": "quote_content",
+            "create_comment": "content",
+            "send_to_group": "message"
+        }
+
+        # ==========================================
+        # 第1段階：行動の決定（ツール選択）
+        # ==========================================
+        user_msg_step1 = BaseMessage.make_user_message(
             role_name="User",
             content=(
-                f"プラットフォームの環境を観察し、ソーシャルメディアでの行動を実行してください。"
-                f"「いいね」だけを繰り返すなど、単一の行動に偏らないようにしてください。"
-                f"現在の環境は以下の通りです: {env_prompt}"))
+                f"プラットフォームの環境を観察し、実行する行動を一つ選択してください。\n"
+                f"【重要】投稿やコメントなどのテキスト生成が必要な行動を選ぶ場合、内容の引数には 'draft' とだけ入力してください。発言の作成は次のステップで行います。\n"
+                f"現在の環境は以下の通りです: {env_prompt}"
+            )
+        )
+        
         try:
-            agent_log.info(
-                f"Agent {self.social_agent_id} observing environment: "
-                f"{env_prompt}")
-            response = await self.astep(user_msg)
-            for tool_call in response.info['tool_calls']:
-                action_name = tool_call.tool_name
-                args = tool_call.args
-                agent_log.info(f"Agent {self.social_agent_id} performed "
-                               f"action: {action_name} with args: {args}")
-                if action_name not in ALL_SOCIAL_ACTIONS:
-                    agent_log.info(
-                        f"Agent {self.social_agent_id} get the result: "
-                        f"{tool_call.result}")
-                # Abort graph action for if 100w Agent
-                # self.perform_agent_graph_action(action_name, args)
+            agent_log.info(f"Agent {self.social_agent_id} Phase 1: Observing environment for action selection.")
+            
+            # ※注意: Camelの `astep` はツールを自動実行してしまう場合があるため、
+            # ツール自動実行を避けるにはモデルを直接呼び出すか、
+            # 実行前にフックする仕組みが必要ですが、ここでは擬似的にモデルからレスポンスを取得する流れとします。
+            
+            openai_messages, num_tokens = self.memory.get_context()
+            openai_messages.append({"role": "user", "content": user_msg_step1.content})
+            
+            # ツールを使用して行動を選択（モデルを直接呼び出し、意図だけを抽出）
+            response_step1 = await self._aget_model_response(
+                openai_messages=openai_messages, 
+                num_tokens=num_tokens
+            )
+            
+            # レスポンスからツール呼び出し情報を取得
+            output_msg = response_step1.output_messages[0]
+            if not output_msg.info or 'tool_calls' not in output_msg.info:
+                agent_log.info(f"Agent {self.social_agent_id} did not select any tools.")
+                return response_step1
 
-                return response
+            tool_call = output_msg.info['tool_calls'][0]
+            action_name = tool_call.tool_name
+            args = tool_call.args
+            
+            agent_log.info(f"Agent {self.social_agent_id} selected action: {action_name} with dummy args: {args}")
+
+            # ==========================================
+            # 第2段階：発話の生成（必要な場合のみ）
+            # ==========================================
+            if action_name in text_generation_actions:
+                target_arg_name = text_generation_actions[action_name]
+                
+                user_msg_step2 = BaseMessage.make_user_message(
+                    role_name="User",
+                    content=(
+                        f"あなたは先ほど '{action_name}' という行動を選択しました。\n"
+                        f"環境情報とあなたのプロフィールを踏まえて、この行動に伴う発言内容を自然な言語で作成してください。\n"
+                        f"出力はJSONなどのフォーマットではなく、純粋な発言テキストのみとしてください。\n"
+                        f"環境情報: {env_prompt}"
+                    )
+                )
+                
+                agent_log.info(f"Agent {self.social_agent_id} Phase 2: Generating text for {action_name}.")
+                
+                # コンテキストに第2段階のプロンプトを追加
+                openai_messages.append({"role": "user", "content": user_msg_step2.content})
+                
+                # ツールを使用せずに純粋なテキスト生成を実行
+                # (toolsを一時的に外すなどの処理が内部で必要になる場合があります)
+                response_step2 = await self._aget_model_response(
+                    openai_messages=openai_messages, 
+                    num_tokens=num_tokens
+                    # tools=None  # もしAPI側でツールの無効化がサポートされていれば追加
+                )
+                
+                generated_text = response_step2.output_messages[0].content
+                agent_log.info(f"Agent {self.social_agent_id} generated text: {generated_text}")
+                
+                # ダミー引数を生成したテキストで上書き
+                args[target_arg_name] = generated_text
+
+            # ==========================================
+            # 第3段階：アクションの実行
+            # ==========================================
+            agent_log.info(f"Agent {self.social_agent_id} performing final action: {action_name} with args: {args}")
+            
+            # データ経由で実際のアクション（環境への書き込み）を実行する
+            # ※ agent.py に定義されている perform_action_by_data を利用
+            result = await self.perform_action_by_data(action_name, **args)
+            agent_log.info(f"Agent {self.social_agent_id} final action result: {result}")
+            
+            return result
+
         except Exception as e:
             agent_log.error(f"Agent {self.social_agent_id} error: {e}")
             return e
