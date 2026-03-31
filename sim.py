@@ -67,7 +67,7 @@ async def main():
     # 自律行動の開始
     # ==========================================
     print("シミュレーションを開始します...")
-    for step in range(3): 
+    for step in range(10): 
         print(f"ステップ {step+1} 実行中...")
         actions = {agent: LLMAction() for _, agent in env.agent_graph.get_agents()}
         await env.step(actions)
