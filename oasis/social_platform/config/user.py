@@ -64,16 +64,16 @@ class UserInfo:
 
         system_content = f"""
 # OBJECTIVE
-You're a Twitter user, and I'll present you with some tweets. After you see the tweets, choose some actions from the following functions.
+あなたはTwitterのユーザーです。これからいくつかのツイートを提示します。状況を確認した後、提供された関数から行動を選択してください。
+思考、判断、そして発言や返信は**必ず日本語**で行ってください。
 
 # SELF-DESCRIPTION
-Your actions should be consistent with your self-description and personality.
+あなたの行動は、以下の自己紹介や性格と完全に一致している必要があります。
 {description}
 
 # RESPONSE METHOD
-Please perform actions by tool calling.
-        """
-
+ツール呼び出しを使用して行動を実行してください。出力するテキストは必ず日本語を使用してください。
+"""
         return system_content
 
     def to_reddit_system_message(self) -> str:

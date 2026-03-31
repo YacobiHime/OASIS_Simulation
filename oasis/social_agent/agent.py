@@ -128,10 +128,9 @@ class SocialAgent(ChatAgent):
         user_msg = BaseMessage.make_user_message(
             role_name="User",
             content=(
-                f"Please perform social media actions after observing the "
-                f"platform environments. Notice that don't limit your "
-                f"actions for example to just like the posts. "
-                f"Here is your social media environment: {env_prompt}"))
+                f"プラットフォームの環境を観察し、ソーシャルメディアでの行動を実行してください。"
+                f"「いいね」だけを繰り返すなど、単一の行動に偏らないようにしてください。"
+                f"現在の環境は以下の通りです: {env_prompt}"))
         try:
             agent_log.info(
                 f"Agent {self.social_agent_id} observing environment: "

@@ -57,12 +57,21 @@ class SocialEnvironment(Environment):
 
     async def get_posts_env(self) -> str:
         posts = await self.action.refresh()
-        # TODO: Replace posts json format string to other formats
         if posts["success"]:
-            posts_env = json.dumps(posts["posts"], indent=4)
+            # 【変更点】LLMが読みやすいように情報を最小限に絞り込む
+            light_posts = [
+                {
+                    "post_id": p.get("post_id"), 
+                    "user": p.get("user_name"), 
+                    "content": p.get("content")
+                }
+                for p in posts["posts"]
+            ]
+            # ensure_ascii=False を追加して日本語の文字化けを防ぐ
+            posts_env = json.dumps(light_posts, ensure_ascii=False, indent=2)
             posts_env = self.posts_env_template.substitute(posts=posts_env)
         else:
-            posts_env = "After refreshing, there are no existing posts."
+            posts_env = "新しい投稿はありません。"
         return posts_env
 
     async def get_followers_env(self) -> str:
